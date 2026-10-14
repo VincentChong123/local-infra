@@ -1,0 +1,114 @@
+# exclude: '^(backup/|__tmp__/|\.cache/)'
+exclude: '^(backup/|__tmp__/|\.cache/|docs/02_Guides/Runbooks/_001_infrastructure-script-runbook\.ipynb/|\.agents/skills)'
+# exclude: '^(backup/|__tmp__/|\.cache/|docs/02_Guides/Runbooks/_001_infrastructure-script-runbook\.ipynb/|infrastructure/docker-compose\.yml)'
+# Optimized for prek - https://j178.dev
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--unsafe]
+      - id: check-added-large-files
+      - id: detect-private-key
+
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: [-c, .yamllint]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.6
+    hooks:
+      # Run the linter.
+      - id: ruff
+        args: [--fix, --extend-per-file-ignores, "tests/test*.py:S101,**/tests/test*.py:S101"]
+        exclude: ^((\.agents|\.claude)/skills/|docs/02_Guides/Runbooks/_001_infrastructure-script-runbook\.ipynb$)
+      # Run the formatter.
+      - id: ruff-format
+        exclude: ^((\.agents|\.claude)/skills/|docs/02_Guides/Runbooks/_001_infrastructure-script-runbook\.ipynb$)
+
+  - repo: local
+    hooks:
+      - id: prevent-local-paths
+        # name: Prevent leaking absolute paths (/home, /mnt)
+        name: Prevent leaking absolute paths (/home)
+        entry: (?:(?<=[ \t"'=])|^)(/home/[a-zA-Z0-9_.-])
+        # entry: (?:(?<=[ \t"'=])|^)(/home/[a-zA-Z0-9_.-]+|/mnt/[a-zA-Z0-9_.-]+)
+        language: pygrep
+        types: [text]
+
+  # -   repo: https://github.com/trufflesecurity/trufflehog
+  #     rev: v3.88.2
+  #     hooks:
+  #     -   id: trufflehog
+  #         name: TruffleHog
+  #         description: Scan secrets with TruffleHog
+  #         entry: trufflehog git file://. --since-commit HEAD --only-verified --fail
+  #         # Use 'trufflehog filesystem' if you want to scan the whole tree every time
+
+  - repo: local
+    hooks:
+      - id: trufflehog
+        name: TruffleHog (System)
+        # Use the absolute path to your home directory binary
+        entry: bash -c "git ls-files --exclude-standard --cached --others | grep -v -E -f .trufflehog/exclude_paths.txt | xargs -d '\n' ~/.local/bin/trufflehog filesystem --fail --config=.trufflehog/rules.yaml"
+        language: system
+        pass_filenames: false
+        exclude: ^(\.agents|\.claude)/skills/
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        # args: ["-lll"] # Only show high-severity issues (like SQLi)
+        args: ["-lll"]     # Only show high-severity issues (like SQLi)
+        additional_dependencies:
+          - pbr
+
+  # -   repo: https://github.com/pre-commit/mirrors-pyright
+  #     rev: v1.1.391  # Use the latest version
+  #     hooks:
+  #     -   id: pyright
+  #         # This ensures pyright only runs once on the whole project
+  #         # which is much faster than running on every single file.
+  #         pass_filenames: false
+  #         # Point to your metadata folder
+  #         entry: pyright src_metadata
+
+  - repo: local
+    hooks:
+      - id: pyright
+        name: Pyright (uvx)
+        entry: uvx --with pyjwt pyright
+        language: system
+        pass_filenames: false
+        types: [python]
+
+  # - repo: https://github.com/bridgecrewio/checkov
+  #   rev: "3.2.327" # Replace with the latest Checkov version tag
+  #   hooks:
+  #     - id: checkov
+  #       always_run: true
+  #       pass_filenames: false
+  #       language_version: python3.12
+  #       args:
+  #         [
+  #           --framework,
+  #           dockerfile,
+  #           "-d",
+  #           "infrastructure",
+  #           "-d",
+  #           "apps",
+  #           "--quiet",
+  #         ]
+  #       # --quiet ensures it only prints output when it finds a failure
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [feat, fix, chore, docs, test, refactor, ci]

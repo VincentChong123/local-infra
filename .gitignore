@@ -1,0 +1,21 @@
+# Environment variables and secrets (per-service and root)
+**/.env
+.env
+.env.*
+!.env.example
+
+# Backups and dumps
+backup/
+*.sql
+*.dump
+
+# Logs and runtime artifacts
+logs/
+*.log
+
+# OS & Editor artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

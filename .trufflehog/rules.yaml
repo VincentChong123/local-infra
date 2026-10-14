@@ -1,0 +1,6 @@
+detectors:
+  - name: Google Cloud HMAC Key
+    keywords:
+      - GOOG
+    regex:
+      token: '\bGOOG[A-Z0-9]{20}\b'

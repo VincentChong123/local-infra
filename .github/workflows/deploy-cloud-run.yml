@@ -1,0 +1,138 @@
+name: Deploy Cloud Run
+
+# Keep this workflow manual-only until the ai_service pyproject migration is complete.
+
+'on':
+  workflow_dispatch:
+    inputs:
+      deploy_mode:
+        description: "Use selective deploy for changed services or run the full release flow"
+        required: true
+        type: choice
+        options:
+          - selective
+          - full_release
+        default: selective
+      changed_services:
+        description: "Space-separated services for selective deploy, for example: ai-service or ai-service api-gateway"
+        required: false
+        type: string
+        default: ai-service
+      release_id:
+        description: "Optional release id override. Leave empty to use the script default."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: cloud-run-deploy
+  cancel-in-progress: false
+
+env:
+  INFRA_DIR: infrastructure/deploy_GCP
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate workflow configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GCP_PROJECT_ID}" ]]; then
+            echo "Repository variable GCP_PROJECT_ID is required." >&2
+            exit 1
+          fi
+
+          required_secrets=(
+            GCP_WORKLOAD_IDENTITY_PROVIDER
+            GCP_DEPLOY_SERVICE_ACCOUNT
+            PROD_MINIO_ENDPOINT
+            PROD_STORAGE_BROWSER_BASE_URL
+            PROD_MINIO_ROOT_USER
+            PROD_MINIO_ROOT_PASSWORD
+            PROD_MINIO_BUCKET_NAME
+          )
+
+          for secret_name in "${required_secrets[@]}"; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "GitHub secret ${secret_name} is required." >&2
+              exit 1
+            fi
+          done
+        env:
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_DEPLOY_SERVICE_ACCOUNT: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          PROD_MINIO_ENDPOINT: ${{ secrets.PROD_MINIO_ENDPOINT }}
+          PROD_STORAGE_BROWSER_BASE_URL: ${{ secrets.PROD_STORAGE_BROWSER_BASE_URL }}
+          PROD_MINIO_ROOT_USER: ${{ secrets.PROD_MINIO_ROOT_USER }}
+          PROD_MINIO_ROOT_PASSWORD: ${{ secrets.PROD_MINIO_ROOT_PASSWORD }}
+          PROD_MINIO_BUCKET_NAME: ${{ secrets.PROD_MINIO_BUCKET_NAME }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Configure Docker authentication
+        shell: bash
+        run: gcloud auth configure-docker gcr.io --quiet
+
+      - name: Write CI production environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'MINIO_ENDPOINT=%s\n' "${{ secrets.PROD_MINIO_ENDPOINT }}"
+            printf 'STORAGE_BROWSER_BASE_URL=%s\n' "${{ secrets.PROD_STORAGE_BROWSER_BASE_URL }}"
+            printf 'MINIO_ROOT_USER=%s\n' "${{ secrets.PROD_MINIO_ROOT_USER }}"
+            printf 'MINIO_ROOT_PASSWORD=%s\n' "${{ secrets.PROD_MINIO_ROOT_PASSWORD }}"
+            printf 'MINIO_BUCKET_NAME=%s\n' "${{ secrets.PROD_MINIO_BUCKET_NAME }}"
+            printf 'NODE_ENV=production\n'
+            printf 'AWS_SUPPRESS_NODE_VERSION_WARNING=1\n'
+          } > .env.production
+
+      - name: Export release override
+        if: ${{ inputs.release_id != '' }}
+        shell: bash
+        run: echo "RELEASE_ID=${{ inputs.release_id }}" >> "$GITHUB_ENV"
+
+      - name: Selective deploy
+        if: ${{ inputs.deploy_mode == 'selective' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r -a changed_services <<< "${{ inputs.changed_services }}"
+          if [[ ${#changed_services[@]} -eq 0 ]]; then
+            echo "changed_services must not be empty for selective deploy." >&2
+            exit 1
+          fi
+          bash "./$INFRA_DIR/7-run_gcloud_deploy_changed_services.sh" "${changed_services[@]}"
+
+      - name: Full release deploy
+        if: ${{ inputs.deploy_mode == 'full_release' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash "./$INFRA_DIR/2-run_local_release_prepare.sh"
+          bash "./$INFRA_DIR/4-run_gcloud_push_release_images.sh"
+          bash "./$INFRA_DIR/5-run_gcloud_resolve_release_digests.sh"
+          bash "./$INFRA_DIR/run_gcloud_deploy_cloud_run.sh"

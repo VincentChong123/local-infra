@@ -1,0 +1,31 @@
+extends: default
+
+ignore: |
+  node_modules/
+  .venv/
+  .git/
+
+rules:
+  # Turn off rules that conflict with auto-formatters (like Prettier)
+  line-length: disable
+  indentation: disable
+  trailing-spaces: disable
+  document-start: disable
+
+  # Spacing and formatting rules (allows alignment spaces for tables, records, etc.)
+  braces: disable
+  brackets: disable
+  commas: disable
+  colons: disable
+  comments-indentation: disable
+  comments:
+    min-spaces-from-content: 1
+
+  # Strict Logic Rules
+  truthy:
+    allowed-values: ["true", "false"]
+    check-keys: false
+  key-duplicates: enable
+
+  # Allow any quotes, or enforce standard string definitions
+  quoted-strings: disable
