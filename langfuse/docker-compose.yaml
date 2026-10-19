@@ -1,0 +1,15 @@
+# Entry point for the local Langfuse stack (the services live in langfuse.compose.yaml).
+#
+# `include:` + `env_file:` points Compose at the local .env (SSOT) explicitly, so
+# every ${VAR} in langfuse.compose.yaml resolves from it with no --env-file flag:
+#   docker compose up -d                                                      # from this folder
+#   bash scripts/run_langfuse.sh
+# Real environment variables still win over .env values, as usual.
+#
+# Reset (deletes all Langfuse data):  docker compose down -v
+
+name: langfuse
+
+include:
+  - path: ./langfuse.compose.yaml
+    env_file: ./.env
