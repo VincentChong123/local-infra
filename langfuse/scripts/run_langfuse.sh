@@ -24,14 +24,22 @@ echo "=== Starting Langfuse (v4) from local-infra ==="
 docker compose up -d "$@"
 
 echo "Waiting for Langfuse web on http://${CONNECT_IP}:${UI_PORT} (first start runs DB migrations, can take a few minutes) ..."
+READY=0
 for _ in {1..90}; do
   if curl -s -f "http://${CONNECT_IP}:${UI_PORT}/api/public/health" > /dev/null 2>&1; then
     echo "Langfuse is ready!"
+    READY=1
     break
   fi
   sleep 3
   printf "."
 done
+
+if [ "$READY" -ne 1 ]; then
+  echo ""
+  echo "ERROR: Langfuse web failed to become healthy within 270 seconds." >&2
+  exit 1
+fi
 
 echo ""
 echo "=========================================================="

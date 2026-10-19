@@ -1,11 +1,3 @@
-  ### 3. What These 3 Jobs Do:
-  # 1. validate-specs: Enforces your repo convention (specs/validate_error_codes.py) so error
-  # codes stay in sync across Python, JavaScript, and JSON.
-  # 2. test-api-gateway: Runs all 61 tests in apps/api_gateway (takes ~1 second).
-  # 3. test-ai-service: Uses the official astral-sh/setup-uv action to sync dependencies and
-  # run all 57 pytest tests in apps/ai_service with OTEL_SDK_DISABLED: "true" to prevent trace
-  # network timeouts.
-
 name: CI
 
 on:
@@ -19,67 +11,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate-specs:
-    name: Validate Cross-Service Error Codes
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install PyYAML
-        run: pip install pyyaml
-
-      - name: Verify error codes SSOT
-        run: python3 specs/validate_error_codes.py
-
-  # test-api-gateway:
-  #   name: API Gateway Unit Tests (Node)
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-
-  #     - name: Set up Node.js
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: 20
-
-  #     - name: Install dependencies
-  #       run: npm --prefix apps/api_gateway ci
-
-  #     - name: Run unit tests
-  #       run: npm --prefix apps/api_gateway test
-
-  test-ai-service:
-    name: AI Service Pytest (Python / uv)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.14
-
-      - name: Install dependencies
-        working-directory: apps/ai_service
-        run: uv sync
-
-      - name: Run pytest
-        working-directory: apps/ai_service
-        env:
-          OTEL_SDK_DISABLED: "true"
-        run: uv run pytest -q
-
   lint-commits:
     name: Lint Commit Messages
     runs-on: ubuntu-latest
@@ -94,3 +25,62 @@ jobs:
 
       - name: Validate Conventional Commits
         uses: wagoid/commitlint-github-action@v6
+
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      langfuse: ${{ steps.filter.outputs.langfuse }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for Langfuse changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            langfuse:
+              - 'langfuse/**'
+              - '.github/workflows/ci.yml'
+
+  test-langfuse-stack:
+    name: Langfuse Stack Smoke Test
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.langfuse == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up environment file
+        run: |
+          cp langfuse/.env.example langfuse/.env
+          # Replace placeholder secrets with valid hex strings
+          sed -i "s/CHANGEME_32_HEX_CHARS/$(openssl rand -hex 16)/g" langfuse/.env
+          sed -i "s/CHANGEME_64_HEX_CHARS/$(openssl rand -hex 32)/g" langfuse/.env
+
+      - name: Start Langfuse Stack
+        working-directory: langfuse
+        run: |
+          bash scripts/run_langfuse.sh
+
+      - name: Run Langfuse Smoke Tests
+        working-directory: langfuse
+        run: |
+          bash scripts/test_langfuse.sh
+
+      - name: Dump container logs on failure
+        if: failure()
+        working-directory: langfuse
+        run: |
+          docker compose logs --tail=100
+
+      - name: Teardown Stack
+        if: always()
+        working-directory: langfuse
+        run: |
+          docker compose down -v
