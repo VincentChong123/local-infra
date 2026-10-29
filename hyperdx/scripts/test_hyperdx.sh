@@ -88,11 +88,19 @@ fi
 
 echo ""
 echo "=== 4. Checking OTLP Trace Ingestion Endpoint ==="
-OTLP_TRACES_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-  -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"resourceSpans":[]}' \
-  "$OTLP_URL/v1/traces" || echo "failed")
+OTLP_TRACES_STATUS="failed"
+for _ in {1..15}; do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"resourceSpans":[]}' \
+    "$OTLP_URL/v1/traces" || echo "failed")
+  if [[ "$CODE" == "200" ]]; then
+    OTLP_TRACES_STATUS="$CODE"
+    break
+  fi
+  sleep 1
+done
 echo "  POST $OTLP_URL/v1/traces -> HTTP $OTLP_TRACES_STATUS"
 if [[ "$OTLP_TRACES_STATUS" != "200" ]]; then
   echo "ERROR: OTLP traces ingestion failed with HTTP $OTLP_TRACES_STATUS (expected 200)" >&2
@@ -101,11 +109,19 @@ fi
 
 echo ""
 echo "=== 5. Checking OTLP Log Ingestion Endpoint ==="
-OTLP_LOGS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-  -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"resourceLogs":[]}' \
-  "$OTLP_URL/v1/logs" || echo "failed")
+OTLP_LOGS_STATUS="failed"
+for _ in {1..15}; do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"resourceLogs":[]}' \
+    "$OTLP_URL/v1/logs" || echo "failed")
+  if [[ "$CODE" == "200" ]]; then
+    OTLP_LOGS_STATUS="$CODE"
+    break
+  fi
+  sleep 1
+done
 echo "  POST $OTLP_URL/v1/logs -> HTTP $OTLP_LOGS_STATUS"
 if [[ "$OTLP_LOGS_STATUS" != "200" ]]; then
   echo "ERROR: OTLP logs ingestion failed with HTTP $OTLP_LOGS_STATUS (expected 200)" >&2
