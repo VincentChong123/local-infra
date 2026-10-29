@@ -1,0 +1,15 @@
+# Entry point for the local HyperDX stack (the service lives in hyperdx.compose.yaml).
+#
+# `include:` + `env_file:` points Compose at the local .env (SSOT) explicitly, so
+# every ${VAR} in hyperdx.compose.yaml resolves from it with no --env-file flag:
+#   docker compose up -d                                                      # from this folder
+#   bash scripts/run_hyperdx.sh
+# Real environment variables still win over .env values, as usual.
+#
+# Reset (deletes all HyperDX data):  docker compose down -v
+
+name: hyperdx
+
+include:
+  - path: ./hyperdx.compose.yaml
+    env_file: ./.env

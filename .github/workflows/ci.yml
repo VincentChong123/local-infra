@@ -33,17 +33,21 @@ jobs:
       pull-requests: read
     outputs:
       langfuse: ${{ steps.filter.outputs.langfuse }}
+      hyperdx: ${{ steps.filter.outputs.hyperdx }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Check for Langfuse changes
+      - name: Check for changes
         uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
             langfuse:
               - 'langfuse/**'
+              - '.github/workflows/ci.yml'
+            hyperdx:
+              - 'hyperdx/**'
               - '.github/workflows/ci.yml'
 
   test-langfuse-stack:
@@ -82,5 +86,41 @@ jobs:
       - name: Teardown Stack
         if: always()
         working-directory: langfuse
+        run: |
+          docker compose down -v
+
+  test-hyperdx-stack:
+    name: HyperDX Stack Smoke Test
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.hyperdx == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up environment file
+        run: |
+          cp hyperdx/.env.example hyperdx/.env
+
+      - name: Start HyperDX Stack
+        working-directory: hyperdx
+        run: |
+          bash scripts/run_hyperdx.sh
+
+      - name: Run HyperDX Smoke Tests
+        working-directory: hyperdx
+        run: |
+          bash scripts/test_hyperdx.sh
+
+      - name: Dump container logs on failure
+        if: failure()
+        working-directory: hyperdx
+        run: |
+          docker compose logs --tail=100
+
+      - name: Teardown Stack
+        if: always()
+        working-directory: hyperdx
         run: |
           docker compose down -v

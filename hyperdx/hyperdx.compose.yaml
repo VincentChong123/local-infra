@@ -1,0 +1,54 @@
+# Local HyperDX tracing & log stack for local development.
+# Decoupled to accept telemetry from multiple services and repositories.
+#
+# Web UI:       http://${HYPERDX_CONNECT_IP}:${HYPERDX_UI_PORT}
+# OTLP HTTP:    http://${HYPERDX_CONNECT_IP}:${HYPERDX_OTLP_HTTP_PORT} (POST /v1/traces, POST /v1/logs)
+# OTLP gRPC:    http://${HYPERDX_CONNECT_IP}:${HYPERDX_OTLP_GRPC_PORT}
+# ClickHouse:   http://${HYPERDX_CONNECT_IP}:${HYPERDX_CLICKHOUSE_HTTP_PORT}
+#
+# Services live here; start through the wrapper docker-compose.yaml (it loads .env).
+
+services:
+  hyperdx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hyperdx-local:latest
+    container_name: hyperdx
+    restart: unless-stopped
+    ports:
+      - "${HYPERDX_LISTEN_IP:?HYPERDX_LISTEN_IP must be set in .env}:${HYPERDX_UI_PORT:?HYPERDX_UI_PORT must be set in .env}:8080"
+      - "${HYPERDX_LISTEN_IP:?HYPERDX_LISTEN_IP must be set in .env}:${HYPERDX_OTLP_HTTP_PORT:?HYPERDX_OTLP_HTTP_PORT must be set in .env}:4318"
+      - "${HYPERDX_LISTEN_IP:?HYPERDX_LISTEN_IP must be set in .env}:${HYPERDX_OTLP_GRPC_PORT:?HYPERDX_OTLP_GRPC_PORT must be set in .env}:4317"
+      - "${HYPERDX_LISTEN_IP:?HYPERDX_LISTEN_IP must be set in .env}:${HYPERDX_CLICKHOUSE_HTTP_PORT:?HYPERDX_CLICKHOUSE_HTTP_PORT must be set in .env}:8123"
+      - "${HYPERDX_LISTEN_IP:?HYPERDX_LISTEN_IP must be set in .env}:${HYPERDX_CLICKHOUSE_TCP_PORT:?HYPERDX_CLICKHOUSE_TCP_PORT must be set in .env}:9000"
+    environment:
+      - NODE_ENV=production
+      - TZ=${TZ:?TZ must be set in .env}
+      - FRONTEND_URL=http://localhost:${HYPERDX_UI_PORT:?HYPERDX_UI_PORT must be set in .env}
+      - HYPERDX_API_PORT=8000
+      - HYPERDX_APP_PORT=8080
+      - HYPERDX_LOG_LEVEL=info
+      - USAGE_STATS_ENABLED=false
+      # Pre-configured ClickHouse connection (skips GUI connection wizard)
+      - 'DEFAULT_CONNECTIONS=[{"name":"Local ClickHouse","host":"http://ch-server:8123","username":"default","password":""}]'
+      # Pre-configured default sources for OTEL traces & logs (skips GUI source creation wizard)
+      - 'DEFAULT_SOURCES=[{"from":{"databaseName":"default","tableName":"otel_logs"},"kind":"log","timestampValueExpression":"Timestamp","name":"Logs","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"Body","serviceNameExpression":"ServiceName","bodyExpression":"Body","eventAttributesExpression":"LogAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,SeverityText,Body","severityTextExpression":"SeverityText","traceIdExpression":"TraceId","spanIdExpression":"SpanId","metadataMaterializedViews":{"keyRollupTable":"otel_logs_key_rollup_15m","kvRollupTable":"otel_logs_kv_rollup_15m","granularity":"15 minute"},"connection":"Local ClickHouse","traceSourceId":"Traces","sessionSourceId":"Sessions","metricSourceId":"Metrics"},{"from":{"databaseName":"default","tableName":"otel_traces"},"kind":"trace","timestampValueExpression":"Timestamp","name":"Traces","displayedTimestampValueExpression":"Timestamp","implicitColumnExpression":"SpanName","serviceNameExpression":"ServiceName","eventAttributesExpression":"SpanAttributes","resourceAttributesExpression":"ResourceAttributes","defaultTableSelectExpression":"Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName","traceIdExpression":"TraceId","spanIdExpression":"SpanId","durationExpression":"Duration","durationPrecision":9,"parentSpanIdExpression":"ParentSpanId","spanNameExpression":"SpanName","spanKindExpression":"SpanKind","statusCodeExpression":"StatusCode","statusMessageExpression":"StatusMessage","metadataMaterializedViews":{"keyRollupTable":"otel_traces_key_rollup_15m","kvRollupTable":"otel_traces_kv_rollup_15m","granularity":"15 minute"},"connection":"Local ClickHouse","logSourceId":"Logs","sessionSourceId":"Sessions","metricSourceId":"Metrics"}]'
+    volumes:
+      - hyperdx_ch_data:/var/lib/clickhouse
+      - hyperdx_mongo_data:/data/db
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  hyperdx_ch_data:
+    name: hyperdx_clickhouse_data
+  hyperdx_mongo_data:
+    name: hyperdx_mongo_data

@@ -9,6 +9,7 @@ Instead of bundling shared infrastructure stacks inside individual application r
 | Service | Path | Host Ports | Purpose |
 |---|---|---|---|
 | **Langfuse** (v4) | `langfuse/` | Web UI / OTLP: `:3100`, MinIO: `:9090` | LLM observability, tracing, dataset curation & evals |
+| **HyperDX** | `hyperdx/` | Web UI: `:8088`, OTLP HTTP: `:4318`, gRPC: `:4317`, ClickHouse: `:8123` / `:9000` | OpenTelemetry distributed tracing and log aggregation |
 
 ## Conventions
 
@@ -27,5 +28,13 @@ Instead of bundling shared infrastructure stacks inside individual application r
 ```bash
 cd langfuse
 cp .env.example .env    # configure credentials if not already present
-bash run_langfuse.sh
+bash scripts/run_langfuse.sh
+```
+
+## Quick Start (HyperDX)
+
+```bash
+cd hyperdx
+cp .env.example .env
+bash scripts/run_hyperdx.sh
 ```
