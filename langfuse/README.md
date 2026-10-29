@@ -73,3 +73,38 @@ LANGFUSE_HOST=http://127.0.0.1:3100
 LANGFUSE_PUBLIC_KEY=<LANGFUSE_PUBLIC_KEY from local-infra/langfuse/.env>
 LANGFUSE_SECRET_KEY=<LANGFUSE_SECRET_KEY from local-infra/langfuse/.env>
 ```
+
+---
+
+## Antigravity CLI Agent Telemetry Hook
+
+To export agent turn traces and tool calls from Antigravity CLI (`agy`) directly to Langfuse, register the centralized exporter in your project's `.agents/hooks.json`:
+
+```json
+{
+  "live-otel-export": {
+    "enabled": true,
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /path/to/local-infra/langfuse/scripts/export_agy_otel.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "bash /path/to/local-infra/langfuse/scripts/export_agy_otel.sh",
+        "timeout": 5
+      }
+    ]
+  }
+}
+```
+
+*Inside Multipass sandboxes*, the exporter automatically detects the host default gateway (`10.120.213.1` or `host.docker.internal`) and routes telemetry to the host Langfuse instance with `<1ms` latency.
