@@ -1,7 +1,7 @@
 # HyperDX All-in-One Local Container
 # Builds on the official HyperDX local all-in-one image (ClickHouse + Mongo + OTel Collector + UI)
 # Reference: https://github.com/hyperdxio/hyperdx/tree/main/docker/hyperdx
-FROM docker.hyperdx.io/hyperdx/hyperdx-local:2-beta
+FROM ghcr.io/hyperdxio/hyperdx-local:2-beta
 
 LABEL org.opencontainers.image.title="HyperDX Local Observability Stack" \
       org.opencontainers.image.description="Decoupled local OpenTelemetry trace and log collector for services" \
