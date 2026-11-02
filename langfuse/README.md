@@ -108,3 +108,17 @@ To export agent turn traces and tool calls from Antigravity CLI (`agy`) directly
 ```
 
 *Inside Multipass sandboxes*, the exporter automatically detects the host default gateway (`10.120.213.1` or `host.docker.internal`) and routes telemetry to the host Langfuse instance with `<1ms` latency.
+
+---
+
+## Observability Tools & Testing Suite
+
+For detailed architecture diagrams, OTel timeline waterfall specs, and the multi-stage test suite, see the [OpenTelemetry & Langfuse Tracing Guide](docs/export_OTEL.md).
+
+| Script | Purpose |
+|---|---|
+| [`scripts/test_connectivity.sh`](scripts/test_connectivity.sh) | **Stage 1 Connectivity**: Raw OTLP curl test (zero Python/AGY dependencies). |
+| [`scripts/test_smoke.sh`](scripts/test_smoke.sh) | **Stage 2 Smoke**: Synthetic `Stop` hook payload pipe testing Python runtime and OTel serialization ($0 LLM cost). |
+| [`scripts/get_active_agy_session.sh`](scripts/get_active_agy_session.sh) | **Active Session Finder**: Discovers active `agy` session PID and prints direct clickable Langfuse UI URLs (Trace Gantt & Session views). |
+| [`scripts/export_agy_otel.sh`](scripts/export_agy_otel.sh) | Centralized exporter shell wrapper with auto-update and strict validation. |
+| [`scripts/export_agy_otel_to_langfuse.py`](scripts/export_agy_otel_to_langfuse.py) | Core OTel trace serialization engine with Gantt chart timeline construction. |
