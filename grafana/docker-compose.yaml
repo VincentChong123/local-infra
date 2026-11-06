@@ -30,4 +30,3 @@ services:
       - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
     extra_hosts:
       - "host.docker.internal:host-gateway"
-

@@ -13,4 +13,3 @@ name: hyperdx
 include:
   - path: ./hyperdx.compose.yaml
     env_file: ./.env
-

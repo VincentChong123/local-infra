@@ -89,13 +89,18 @@ jobs:
 
       - name: Set up environment file
         run: |
-          EXISTING_DIR="$(docker inspect langfuse-postgres-1 --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true)"
-          if [ -n "$EXISTING_DIR" ] && [ -f "$EXISTING_DIR/.env" ]; then
-            cp "$EXISTING_DIR/.env" langfuse/.env
-          elif [ ! -f langfuse/.env ]; then
-            cp langfuse/.env.example langfuse/.env
-            sed -i "s/CHANGEME_32_HEX_CHARS/$(openssl rand -hex 16)/g" langfuse/.env
-            sed -i "s/CHANGEME_64_HEX_CHARS/$(openssl rand -hex 32)/g" langfuse/.env
+          if [ ! -f langfuse/.env ]; then
+            HOST_REPO="${LOCAL_INFRA_ROOT:-$(readlink -f /proc/$PPID/cwd 2>/dev/null || true)}"
+            EXISTING_DIR="$(docker inspect langfuse-postgres-1 --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true)"
+            if [ -n "$HOST_REPO" ] && [ -f "$HOST_REPO/langfuse/.env" ]; then
+              cp "$HOST_REPO/langfuse/.env" langfuse/.env
+            elif [ -n "$EXISTING_DIR" ] && [ -f "$EXISTING_DIR/.env" ]; then
+              cp "$EXISTING_DIR/.env" langfuse/.env
+            else
+              cp langfuse/.env.example langfuse/.env
+              sed -i "s/CHANGEME_32_HEX_CHARS/$(openssl rand -hex 16)/g" langfuse/.env
+              sed -i "s/CHANGEME_64_HEX_CHARS/$(openssl rand -hex 32)/g" langfuse/.env
+            fi
           fi
 
       - name: Start Langfuse Stack
@@ -132,8 +137,27 @@ jobs:
 
       - name: Set up environment file
         run: |
-          [ -f hyperdx/.env ] || cp hyperdx/.env.example hyperdx/.env
-          [ -f grafana/.env ] || cp grafana/.env.example grafana/.env
+          HOST_REPO="${LOCAL_INFRA_ROOT:-$(readlink -f /proc/$PPID/cwd 2>/dev/null || true)}"
+          if [ ! -f hyperdx/.env ]; then
+            EXISTING_HDX_DIR="$(docker inspect hyperdx --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true)"
+            if [ -n "$HOST_REPO" ] && [ -f "$HOST_REPO/hyperdx/.env" ]; then
+              cp "$HOST_REPO/hyperdx/.env" hyperdx/.env
+            elif [ -n "$EXISTING_HDX_DIR" ] && [ -f "$EXISTING_HDX_DIR/.env" ]; then
+              cp "$EXISTING_HDX_DIR/.env" hyperdx/.env
+            else
+              cp hyperdx/.env.example hyperdx/.env
+            fi
+          fi
+          if [ ! -f grafana/.env ]; then
+            EXISTING_GF_DIR="$(docker inspect grafana --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true)"
+            if [ -n "$HOST_REPO" ] && [ -f "$HOST_REPO/grafana/.env" ]; then
+              cp "$HOST_REPO/grafana/.env" grafana/.env
+            elif [ -n "$EXISTING_GF_DIR" ] && [ -f "$EXISTING_GF_DIR/.env" ]; then
+              cp "$EXISTING_GF_DIR/.env" grafana/.env
+            else
+              cp grafana/.env.example grafana/.env
+            fi
+          fi
           mkdir -p grafana/data
           if [ "${ACT:-}" != "true" ]; then
             sudo chown -R 1000:1000 grafana/data
