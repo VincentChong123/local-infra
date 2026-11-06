@@ -60,12 +60,12 @@ jobs:
           CHANGED=$(git diff --name-only "$BASE_REF"...HEAD)
           echo "Changed files since $BASE_REF:"
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(langfuse/|\.github/workflows/ci\.yml$)'; then
+          if echo "$CHANGED" | grep -qE '^(langfuse/|scripts/|\.github/workflows/ci\.yml$)'; then
             echo "langfuse=true" >> "$GITHUB_OUTPUT"
           else
             echo "langfuse=false" >> "$GITHUB_OUTPUT"
           fi
-          if echo "$CHANGED" | grep -qE '^(hyperdx/|\.github/workflows/ci\.yml$)'; then
+          if echo "$CHANGED" | grep -qE '^(hyperdx/|grafana/|scripts/|\.github/workflows/ci\.yml$)'; then
             echo "hyperdx=true" >> "$GITHUB_OUTPUT"
           else
             echo "hyperdx=false" >> "$GITHUB_OUTPUT"
@@ -123,6 +123,9 @@ jobs:
       - name: Set up environment file
         run: |
           cp hyperdx/.env.example hyperdx/.env
+          cp grafana/.env.example grafana/.env
+          mkdir -p grafana/data
+          sudo chown -R 1000:1000 grafana/data
 
       - name: Start HyperDX Stack
         working-directory: hyperdx
@@ -136,12 +139,13 @@ jobs:
 
       - name: Dump container logs on failure
         if: failure()
-        working-directory: hyperdx
         run: |
-          docker compose logs --tail=100
+          docker compose -f hyperdx/docker-compose.yaml logs --tail=100
+          docker compose -f grafana/docker-compose.yaml logs --tail=100
 
       - name: Teardown Stack
         if: always()
-        working-directory: hyperdx
         run: |
-          docker compose down -v
+          docker compose -f grafana/docker-compose.yaml down -v
+          docker compose -f hyperdx/docker-compose.yaml down -v
+
