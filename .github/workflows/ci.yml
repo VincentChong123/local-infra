@@ -41,15 +41,21 @@ jobs:
     permissions:
       pull-requests: read
     outputs:
-      langfuse: ${{ steps.filter.outputs.langfuse }}
-      hyperdx: ${{ steps.filter.outputs.hyperdx }}
+      langfuse: ${{ steps.filter.outputs.langfuse || steps.act-fallback.outputs.enabled }}
+      hyperdx: ${{ steps.filter.outputs.hyperdx || steps.act-fallback.outputs.enabled }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Enable all targets when running under local act
+        if: ${{ env.ACT }}
+        id: act-fallback
+        run: echo "enabled=true" >> "$GITHUB_OUTPUT"
+
       - name: Check for changes
+        if: ${{ !env.ACT }}
         id: filter
         run: |
           if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
@@ -83,10 +89,14 @@ jobs:
 
       - name: Set up environment file
         run: |
-          cp langfuse/.env.example langfuse/.env
-          # Replace placeholder secrets with valid hex strings
-          sed -i "s/CHANGEME_32_HEX_CHARS/$(openssl rand -hex 16)/g" langfuse/.env
-          sed -i "s/CHANGEME_64_HEX_CHARS/$(openssl rand -hex 32)/g" langfuse/.env
+          EXISTING_DIR="$(docker inspect langfuse-postgres-1 --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true)"
+          if [ -n "$EXISTING_DIR" ] && [ -f "$EXISTING_DIR/.env" ]; then
+            cp "$EXISTING_DIR/.env" langfuse/.env
+          elif [ ! -f langfuse/.env ]; then
+            cp langfuse/.env.example langfuse/.env
+            sed -i "s/CHANGEME_32_HEX_CHARS/$(openssl rand -hex 16)/g" langfuse/.env
+            sed -i "s/CHANGEME_64_HEX_CHARS/$(openssl rand -hex 32)/g" langfuse/.env
+          fi
 
       - name: Start Langfuse Stack
         working-directory: langfuse
@@ -105,7 +115,7 @@ jobs:
           docker compose logs --tail=100
 
       - name: Teardown Stack
-        if: always()
+        if: ${{ always() && !env.ACT }}
         working-directory: langfuse
         run: |
           docker compose down -v
@@ -122,10 +132,12 @@ jobs:
 
       - name: Set up environment file
         run: |
-          cp hyperdx/.env.example hyperdx/.env
-          cp grafana/.env.example grafana/.env
+          [ -f hyperdx/.env ] || cp hyperdx/.env.example hyperdx/.env
+          [ -f grafana/.env ] || cp grafana/.env.example grafana/.env
           mkdir -p grafana/data
-          sudo chown -R 1000:1000 grafana/data
+          if [ "${ACT:-}" != "true" ]; then
+            sudo chown -R 1000:1000 grafana/data
+          fi
 
       - name: Start HyperDX Stack
         working-directory: hyperdx
@@ -144,7 +156,7 @@ jobs:
           docker compose -f grafana/docker-compose.yaml logs --tail=100
 
       - name: Teardown Stack
-        if: always()
+        if: ${{ always() && !env.ACT }}
         run: |
           docker compose -f grafana/docker-compose.yaml down -v
           docker compose -f hyperdx/docker-compose.yaml down -v
