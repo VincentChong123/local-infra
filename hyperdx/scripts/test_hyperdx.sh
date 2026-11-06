@@ -5,7 +5,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SERVICE_DIR/.." && pwd)"
 cd "$SERVICE_DIR"
+
+# Load shared hash-checking routine (shared across grafana, hyperdx, and langfuse)
+# shellcheck source=../../scripts/compose_hash.sh
+source "$REPO_ROOT/scripts/compose_hash.sh"
 
 # SSOT: local .env in hyperdx/ directory
 ENV_FILE="$SERVICE_DIR/.env"
@@ -16,26 +21,49 @@ set -a; . "$ENV_FILE"; set +a
 : "${HYPERDX_CONNECT_IP:?HYPERDX_CONNECT_IP must be set in .env}"
 : "${HYPERDX_OTLP_HTTP_PORT:?HYPERDX_OTLP_HTTP_PORT must be set in .env}"
 : "${HYPERDX_CLICKHOUSE_HTTP_PORT:?HYPERDX_CLICKHOUSE_HTTP_PORT must be set in .env}"
+GRAFANA_PORT="${GRAFANA_PORT:-3001}"
 
 UI_URL="http://${HYPERDX_CONNECT_IP}:${HYPERDX_UI_PORT}"
+GRAFANA_URL="http://${HYPERDX_CONNECT_IP}:${GRAFANA_PORT}"
 CH_URL="http://${HYPERDX_CONNECT_IP}:${HYPERDX_CLICKHOUSE_HTTP_PORT}"
 OTLP_URL="http://${HYPERDX_CONNECT_IP}:${HYPERDX_OTLP_HTTP_PORT}"
 
 echo "=========================================================="
-echo " Running HyperDX Smoke Tests"
-echo " Target UI:         $UI_URL"
+echo " Running HyperDX + Grafana Smoke Tests"
+echo " Target HyperDX UI: $UI_URL"
+echo " Target Grafana UI: $GRAFANA_URL"
 echo " Target OTLP HTTP:  $OTLP_URL"
 echo " Target ClickHouse: $CH_URL"
 echo "=========================================================="
 
+echo "=== 0. Verifying Compose & .env Hash State ==="
+for STACK_DIR in "$SERVICE_DIR" "$REPO_ROOT/grafana"; do
+  STACK_NAME="$(basename "$STACK_DIR")"
+  CURRENT_HASH="$(compute_stack_hash "$STACK_DIR")"
+  echo "  [$STACK_NAME sha256]: $CURRENT_HASH"
+  if [ -f "$STACK_DIR/.compose.sha256" ]; then
+    SAVED_HASH="$(cat "$STACK_DIR/.compose.sha256" 2>/dev/null || true)"
+    if [ "$CURRENT_HASH" != "$SAVED_HASH" ]; then
+      echo "  WARNING: $STACK_NAME Compose/.env changed since last startup ($SAVED_HASH -> $CURRENT_HASH). Re-applying stack..."
+      compose_up_smart "$STACK_DIR" --
+    else
+      echo "  [$STACK_NAME hash-check]: Matches active stack state (.compose.sha256)"
+    fi
+  fi
+done
+
+echo ""
 echo "=== 1. Checking Container Health ==="
+for CONTAINER_NAME in "hyperdx" "grafana"; do
+  STATUS=$(docker inspect --format '{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "not running")
+  echo "  [$CONTAINER_NAME status]: $STATUS"
+  if [[ "$STATUS" != "running" ]]; then
+    echo "ERROR: Container $CONTAINER_NAME is not running (status: $STATUS)" >&2
+    exit 1
+  fi
+done
+
 CONTAINER_NAME="hyperdx"
-STATUS=$(docker inspect --format '{{.State.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "not running")
-echo "  [$CONTAINER_NAME status]: $STATUS"
-if [[ "$STATUS" != "running" ]]; then
-  echo "ERROR: Container $CONTAINER_NAME is not running (status: $STATUS)" >&2
-  exit 1
-fi
 
 HEALTH=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
 echo "  [$CONTAINER_NAME health]: $HEALTH"
@@ -56,11 +84,18 @@ if [[ "$HEALTH" != "healthy" && "$HEALTH" != "none" ]]; then
 fi
 
 echo ""
-echo "=== 2. Checking Web UI Endpoint ==="
+echo "=== 2. Checking Web UI Endpoints (HyperDX & Grafana) ==="
 UI_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$UI_URL" || echo "failed")
 echo "  GET $UI_URL -> HTTP $UI_STATUS"
 if [[ "$UI_STATUS" != "200" ]]; then
-  echo "ERROR: Web UI check failed with HTTP $UI_STATUS (expected 200)" >&2
+  echo "ERROR: HyperDX Web UI check failed with HTTP $UI_STATUS (expected 200)" >&2
+  exit 1
+fi
+
+GRAFANA_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$GRAFANA_URL/api/health" || echo "failed")
+echo "  GET $GRAFANA_URL/api/health -> HTTP $GRAFANA_STATUS"
+if [[ "$GRAFANA_STATUS" != "200" ]]; then
+  echo "ERROR: Grafana health check failed with HTTP $GRAFANA_STATUS (expected 200)" >&2
   exit 1
 fi
 
@@ -130,8 +165,9 @@ fi
 
 echo ""
 echo "=========================================================="
-echo " SUCCESS: All HyperDX smoke tests passed!"
-echo " Web UI:     $UI_URL"
+echo " SUCCESS: All HyperDX + Grafana smoke tests passed!"
+echo " HyperDX UI:  $UI_URL"
+echo " Grafana UI:  $GRAFANA_URL"
 echo " OTLP Ingest: $OTLP_URL"
 echo " ClickHouse:  $CH_URL"
 echo "=========================================================="
