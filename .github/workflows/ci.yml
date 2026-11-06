@@ -45,9 +45,12 @@ jobs:
           filters: |
             langfuse:
               - 'langfuse/**'
+              - 'scripts/**'
               - '.github/workflows/ci.yml'
             hyperdx:
               - 'hyperdx/**'
+              - 'grafana/**'
+              - 'scripts/**'
               - '.github/workflows/ci.yml'
 
   test-langfuse-stack:
@@ -99,28 +102,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up environment file
+      - name: Set up environment files
         run: |
           cp hyperdx/.env.example hyperdx/.env
+          cp grafana/.env.example grafana/.env
+          mkdir -p grafana/data
+          sudo chown -R 1000:1000 grafana/data
 
-      - name: Start HyperDX Stack
+      - name: Start HyperDX + Grafana Stack
         working-directory: hyperdx
         run: |
           bash scripts/run_hyperdx.sh
 
-      - name: Run HyperDX Smoke Tests
+      - name: Run HyperDX + Grafana Smoke Tests
         working-directory: hyperdx
         run: |
           bash scripts/test_hyperdx.sh
 
       - name: Dump container logs on failure
         if: failure()
-        working-directory: hyperdx
         run: |
-          docker compose logs --tail=100
+          docker compose -f hyperdx/docker-compose.yaml logs --tail=100
+          docker compose -f grafana/docker-compose.yaml logs --tail=100
 
       - name: Teardown Stack
         if: always()
-        working-directory: hyperdx
         run: |
-          docker compose down -v
+          docker compose -f grafana/docker-compose.yaml down -v
+          docker compose -f hyperdx/docker-compose.yaml down -v
