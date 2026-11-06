@@ -4,7 +4,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SERVICE_DIR/.." && pwd)"
 cd "$SERVICE_DIR"
+
+# Load shared hash-checking routine (shared across grafana, hyperdx, and langfuse)
+# shellcheck source=../../scripts/compose_hash.sh
+source "$REPO_ROOT/scripts/compose_hash.sh"
 
 # SSOT: local .env in langfuse/ directory
 ENV_FILE="$SERVICE_DIR/.env"
@@ -21,7 +26,7 @@ UI_PORT="$LANGFUSE_UI_PORT"
 CONNECT_IP="$LANGFUSE_CONNECT_IP"
 
 echo "=== Starting Langfuse (v4) from local-infra ==="
-docker compose up -d "$@"
+compose_up_smart "$SERVICE_DIR" -- "$@"
 
 echo "Waiting for Langfuse web on http://${CONNECT_IP}:${UI_PORT} (first start runs DB migrations, can take a few minutes) ..."
 READY=0

@@ -4,7 +4,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SERVICE_DIR/.." && pwd)"
 cd "$SERVICE_DIR"
+
+# Load shared hash-checking routine (shared across grafana, hyperdx, and langfuse)
+# shellcheck source=../../scripts/compose_hash.sh
+source "$REPO_ROOT/scripts/compose_hash.sh"
 
 # SSOT: local .env in hyperdx/ directory
 ENV_FILE="$SERVICE_DIR/.env"
@@ -23,7 +28,7 @@ UI_PORT="$HYPERDX_UI_PORT"
 CONNECT_IP="$HYPERDX_CONNECT_IP"
 
 echo "=== Starting HyperDX from local-infra ==="
-docker compose up -d "$@"
+compose_up_smart "$SERVICE_DIR" -- "$@"
 
 echo "Waiting for HyperDX Web UI on http://${CONNECT_IP}:${UI_PORT} ..."
 READY=0
@@ -61,11 +66,16 @@ if [ "$OTLP_READY" -ne 1 ]; then
   exit 1
 fi
 
+GRAFANA_PORT="${GRAFANA_PORT:-3001}"
+echo ""
+bash "$REPO_ROOT/grafana/scripts/run_grafana.sh" "$@"
+
 echo ""
 echo "=========================================================="
-echo " HyperDX Observability Stack Running (local-infra)"
+echo " HyperDX + Grafana Observability Stack Running (local-infra)"
 echo "=========================================================="
-echo " - Web UI:        http://${CONNECT_IP}:${UI_PORT}"
+echo " - HyperDX UI:    http://${CONNECT_IP}:${UI_PORT}"
+echo " - Grafana UI:    http://${CONNECT_IP}:${GRAFANA_PORT}"
 echo " - OTLP HTTP:     http://${CONNECT_IP}:${HYPERDX_OTLP_HTTP_PORT} (POST /v1/traces, POST /v1/logs)"
 echo " - OTLP gRPC:     http://${CONNECT_IP}:${HYPERDX_OTLP_GRPC_PORT}"
 echo " - ClickHouse:    http://${CONNECT_IP}:${HYPERDX_CLICKHOUSE_HTTP_PORT}"
