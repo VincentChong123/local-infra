@@ -13,6 +13,7 @@ backup/
 # Logs and runtime artifacts
 logs/
 *.log
+**/.compose.sha256
 
 # OS & Editor artifacts
 .DS_Store
