@@ -32,22 +32,31 @@ jobs:
     permissions:
       pull-requests: read
     outputs:
-      langfuse: ${{ steps.filter.outputs.langfuse }}
-      hyperdx: ${{ steps.filter.outputs.hyperdx }}
+      langfuse: ${{ steps.filter.outputs.langfuse || steps.act-fallback.outputs.enabled }}
+      hyperdx: ${{ steps.filter.outputs.hyperdx || steps.act-fallback.outputs.enabled }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Enable all targets when running under local act
+        if: ${{ env.ACT }}
+        id: act-fallback
+        run: echo "enabled=true" >> "$GITHUB_OUTPUT"
+
       - name: Check for changes
+        if: ${{ !env.ACT }}
         uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
             langfuse:
               - 'langfuse/**'
+              - 'scripts/**'
               - '.github/workflows/ci.yml'
             hyperdx:
               - 'hyperdx/**'
+              - 'grafana/**'
+              - 'scripts/**'
               - '.github/workflows/ci.yml'
 
   test-langfuse-stack:
@@ -62,10 +71,19 @@ jobs:
 
       - name: Set up environment file
         run: |
-          cp langfuse/.env.example langfuse/.env
-          # Replace placeholder secrets with valid hex strings
-          sed -i "s/CHANGEME_32_HEX_CHARS/$(openssl rand -hex 16)/g" langfuse/.env
-          sed -i "s/CHANGEME_64_HEX_CHARS/$(openssl rand -hex 32)/g" langfuse/.env
+          if [ ! -f langfuse/.env ]; then
+            HOST_REPO="${LOCAL_INFRA_ROOT:-$(readlink -f /proc/$PPID/cwd 2>/dev/null || true)}"
+            EXISTING_DIR="$(docker inspect langfuse-postgres-1 --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true)"
+            if [ -n "$HOST_REPO" ] && [ -f "$HOST_REPO/langfuse/.env" ]; then
+              cp "$HOST_REPO/langfuse/.env" langfuse/.env
+            elif [ -n "$EXISTING_DIR" ] && [ -f "$EXISTING_DIR/.env" ]; then
+              cp "$EXISTING_DIR/.env" langfuse/.env
+            else
+              cp langfuse/.env.example langfuse/.env
+              sed -i "s/CHANGEME_32_HEX_CHARS/$(openssl rand -hex 16)/g" langfuse/.env
+              sed -i "s/CHANGEME_64_HEX_CHARS/$(openssl rand -hex 32)/g" langfuse/.env
+            fi
+          fi
 
       - name: Start Langfuse Stack
         working-directory: langfuse
@@ -84,7 +102,7 @@ jobs:
           docker compose logs --tail=100
 
       - name: Teardown Stack
-        if: always()
+        if: ${{ always() && !env.ACT }}
         working-directory: langfuse
         run: |
           docker compose down -v
@@ -99,28 +117,52 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up environment file
+      - name: Set up environment files
         run: |
-          cp hyperdx/.env.example hyperdx/.env
+          HOST_REPO="${LOCAL_INFRA_ROOT:-$(readlink -f /proc/$PPID/cwd 2>/dev/null || true)}"
+          if [ ! -f hyperdx/.env ]; then
+            EXISTING_HDX_DIR="$(docker inspect hyperdx --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true)"
+            if [ -n "$HOST_REPO" ] && [ -f "$HOST_REPO/hyperdx/.env" ]; then
+              cp "$HOST_REPO/hyperdx/.env" hyperdx/.env
+            elif [ -n "$EXISTING_HDX_DIR" ] && [ -f "$EXISTING_HDX_DIR/.env" ]; then
+              cp "$EXISTING_HDX_DIR/.env" hyperdx/.env
+            else
+              cp hyperdx/.env.example hyperdx/.env
+            fi
+          fi
+          if [ ! -f grafana/.env ]; then
+            EXISTING_GF_DIR="$(docker inspect grafana --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true)"
+            if [ -n "$HOST_REPO" ] && [ -f "$HOST_REPO/grafana/.env" ]; then
+              cp "$HOST_REPO/grafana/.env" grafana/.env
+            elif [ -n "$EXISTING_GF_DIR" ] && [ -f "$EXISTING_GF_DIR/.env" ]; then
+              cp "$EXISTING_GF_DIR/.env" grafana/.env
+            else
+              cp grafana/.env.example grafana/.env
+            fi
+          fi
+          mkdir -p grafana/data
+          if [ "${ACT:-}" != "true" ]; then
+            sudo chown -R 1000:1000 grafana/data
+          fi
 
-      - name: Start HyperDX Stack
+      - name: Start HyperDX + Grafana Stack
         working-directory: hyperdx
         run: |
           bash scripts/run_hyperdx.sh
 
-      - name: Run HyperDX Smoke Tests
+      - name: Run HyperDX + Grafana Smoke Tests
         working-directory: hyperdx
         run: |
           bash scripts/test_hyperdx.sh
 
       - name: Dump container logs on failure
         if: failure()
-        working-directory: hyperdx
         run: |
-          docker compose logs --tail=100
+          docker compose -f hyperdx/docker-compose.yaml logs --tail=100
+          docker compose -f grafana/docker-compose.yaml logs --tail=100
 
       - name: Teardown Stack
-        if: always()
-        working-directory: hyperdx
+        if: ${{ always() && !env.ACT }}
         run: |
-          docker compose down -v
+          docker compose -f grafana/docker-compose.yaml down -v
+          docker compose -f hyperdx/docker-compose.yaml down -v

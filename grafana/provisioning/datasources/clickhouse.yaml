@@ -1,0 +1,28 @@
+apiVersion: 1
+
+datasources:
+  - name: HyperDX ClickHouse
+    type: grafana-clickhouse-datasource
+    uid: hyperdx-clickhouse
+    access: proxy
+    isDefault: true
+    editable: true
+    jsonData:
+      host: host.docker.internal
+      server: host.docker.internal
+      port: 9000
+      protocol: native
+      username: default
+      defaultDatabase: default
+      otelEnabled: true
+      otelVersion: latest
+      logs:
+        defaultDatabase: default
+        defaultTable: otel_logs
+        otelEnabled: true
+        otelVersion: latest
+      traces:
+        defaultDatabase: default
+        defaultTable: otel_traces
+        otelEnabled: true
+        otelVersion: latest

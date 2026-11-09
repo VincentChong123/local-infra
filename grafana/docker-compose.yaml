@@ -1,0 +1,32 @@
+# services:
+#   grafana:
+#     image: grafana/grafana-enterprise
+#     container_name: grafana
+#     restart: unless-stopped
+#     ports:
+#       - '3000:3000'
+
+# <<<<<
+# https://grafana.com/docs/grafana/latest/setup-grafana/installation/docker/#use-bind-mounts-1
+name: grafana
+
+services:
+  grafana:
+    image: grafana/grafana-enterprise
+    container_name: grafana
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    # if you are running as root then set it to 0
+    # else find the right id with the id -u command
+    user: '${GRAFANA_USER_ID:-1000:1000}'
+    ports:
+      - '${GRAFANA_PORT:-3001}:3000'
+    # adding the mount volume point which we create earlier
+    volumes:
+      - './data:/var/lib/grafana'
+      - './provisioning/datasources:/etc/grafana/provisioning/datasources:ro'
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
