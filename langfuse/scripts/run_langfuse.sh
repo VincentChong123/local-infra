@@ -16,6 +16,12 @@ set -a; . "$ENV_FILE"; set +a
 : "${LANGFUSE_CONNECT_IP:?LANGFUSE_CONNECT_IP must be set in .env}"
 : "${LANGFUSE_INIT_USER_EMAIL:?LANGFUSE_INIT_USER_EMAIL must be set in .env}"
 : "${LANGFUSE_PUBLIC_KEY:?LANGFUSE_PUBLIC_KEY must be set in .env}"
+: "${LANGFUSE_ENCRYPTION_KEY:?LANGFUSE_ENCRYPTION_KEY must be set in .env}"
+
+if [[ ! "$LANGFUSE_ENCRYPTION_KEY" =~ ^[0-9a-fA-F]{64}$ ]]; then
+  echo "ERROR: LANGFUSE_ENCRYPTION_KEY in $ENV_FILE must be 64 hex characters (generate via: openssl rand -hex 32)." >&2
+  exit 1
+fi
 
 UI_PORT="$LANGFUSE_UI_PORT"
 CONNECT_IP="$LANGFUSE_CONNECT_IP"
