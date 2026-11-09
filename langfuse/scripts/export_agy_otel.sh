@@ -79,12 +79,16 @@ fi
 # ------------------------------------------------------------------------------
 # 1. Environment Loading (CWD .env or local-infra langfuse .env as SSOT)
 # ------------------------------------------------------------------------------
-ENV_FILE="${PWD}/.env"
-if [ ! -f "$ENV_FILE" ]; then
-    ENV_FILE="${SCRIPT_DIR}/../.env"
+SSOT_ENV_FILE="${SCRIPT_DIR}/../.env"
+if [ -f "$SSOT_ENV_FILE" ]; then
+    set -a
+    # shellcheck source=/dev/null
+    . "$SSOT_ENV_FILE"
+    set +a
 fi
 
-if [ -f "$ENV_FILE" ]; then
+ENV_FILE="${PWD}/.env"
+if [ -f "$ENV_FILE" ] && [ "$ENV_FILE" != "$SSOT_ENV_FILE" ]; then
     set -a
     # shellcheck source=/dev/null
     . "$ENV_FILE"
@@ -141,6 +145,10 @@ elif is_otel_capable "$HOME/.gemini/antigravity-cli/hooks_env/.venv/bin/python3"
 # 3. Project-scoped venvs (if native and valid)
 elif is_otel_capable "${PWD}/.venv/bin/python3"; then
     PYTHON="${PWD}/.venv/bin/python3"
+elif is_otel_capable "${SCRIPT_DIR}/../../.venv/bin/python3"; then
+    PYTHON="${SCRIPT_DIR}/../../.venv/bin/python3"
+elif is_otel_capable "${SCRIPT_DIR}/../.venv/bin/python3"; then
+    PYTHON="${SCRIPT_DIR}/../.venv/bin/python3"
 elif is_otel_capable "${PWD}/apps/ai_service/.venv/bin/python3"; then
     PYTHON="${PWD}/apps/ai_service/.venv/bin/python3"
 # 4. Sandbox guest virtual environments (~/.venv or /var/venv or UV_PROJECT_ENVIRONMENT)
