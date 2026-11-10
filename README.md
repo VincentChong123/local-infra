@@ -10,6 +10,7 @@ Instead of bundling shared infrastructure stacks inside individual application r
 |---|---|---|---|
 | **Langfuse** (v4) | `langfuse/` | Web UI / OTLP: `:3100`, MinIO: `:9090` | LLM observability, tracing, dataset curation & evals |
 | **HyperDX** | `hyperdx/` | Web UI: `:8088`, OTLP HTTP: `:4318`, gRPC: `:4317`, ClickHouse: `:8123` / `:9000` | OpenTelemetry distributed tracing and log aggregation |
+| **Gitea** | `gitea/` | Web UI: `:3200`, SSH: `:2222` | Local GitHub repository mirror & timestamped immutable backup server |
 
 ## Conventions
 
@@ -38,3 +39,26 @@ cd hyperdx
 cp .env.example .env
 bash scripts/run_hyperdx.sh
 ```
+
+## Quick Start (Gitea Backup Server)
+
+```bash
+cd gitea
+cp .env.example .env
+bash scripts/run_gitea.sh
+bash scripts/backup_gitea.sh
+```
+
+## Local CI/CD with `act`
+
+To run the GitHub Actions CI workflow locally and validate changes against branch protection rules before pushing:
+
+```bash
+# Build the minimal runner image
+docker build -t local-infra-runner:latest -f .github/act/Dockerfile .
+
+# Execute CI locally
+act workflow_dispatch -W .github/workflows/ci.yml
+```
+
+See [docs/runbook_local_act_ci.md](docs/runbook_local_act_ci.md) for full documentation, job isolation, and git hook setup.

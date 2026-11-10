@@ -1,10 +1,11 @@
 name: CI
 
 on:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,8 +24,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate Conventional Commits
-        uses: wagoid/commitlint-github-action@v6
+      - name: Validate Conventional Commits (Local act)
+        run: |
+          BASE_REF=$(git rev-parse --verify origin/main 2>/dev/null || git rev-parse HEAD~1)
+          npx --yes -p @commitlint/cli@19 -p @commitlint/config-conventional@19 \
+            commitlint --from "$BASE_REF" --to HEAD --verbose
 
   detect-changes:
     name: Detect Changed Services
@@ -37,18 +41,26 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Check for changes
-        uses: dorny/paths-filter@v3
-        id: filter
         with:
-          filters: |
-            langfuse:
-              - 'langfuse/**'
-              - '.github/workflows/ci.yml'
-            hyperdx:
-              - 'hyperdx/**'
-              - '.github/workflows/ci.yml'
+          fetch-depth: 0
+
+      - name: Check for changes (Local git diff)
+        id: filter
+        run: |
+          BASE_REF=$(git rev-parse --verify origin/main 2>/dev/null || git rev-parse HEAD~1)
+          CHANGED=$(git diff --name-only "$BASE_REF"...HEAD)
+          echo "Changed files since $BASE_REF:"
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE '^(langfuse/|\.github/workflows/ci\.yml$)'; then
+            echo "langfuse=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "langfuse=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$CHANGED" | grep -qE '^(hyperdx/|\.github/workflows/ci\.yml$)'; then
+            echo "hyperdx=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "hyperdx=false" >> "$GITHUB_OUTPUT"
+          fi
 
   test-langfuse-stack:
     name: Langfuse Stack Smoke Test
