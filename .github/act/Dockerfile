@@ -11,13 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl \
     tar \
     gzip \
-    nodejs \
-    npm \
     docker.io \
     docker-compose-v2 \
-    && rm -rf /var/lib/apt/lists/* \
-    && npm install -g @commitlint/cli @commitlint/config-conventional --prefix /usr/local
-
-ENV NODE_PATH=/usr/local/lib/node_modules
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
 
 ENTRYPOINT ["/bin/bash"]

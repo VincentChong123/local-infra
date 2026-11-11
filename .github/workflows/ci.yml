@@ -24,11 +24,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate Conventional Commits (Local act)
+      - name: Validate Conventional Commits
         run: |
-          BASE_REF=$(git rev-parse --verify origin/main 2>/dev/null || git rev-parse HEAD~1)
-          npx --yes -p @commitlint/cli@19 -p @commitlint/config-conventional@19 \
-            commitlint --from "$BASE_REF" --to HEAD --verbose
+          npm install --no-save --no-package-lock @commitlint/cli@19 @commitlint/config-conventional@19
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_REF=$(git rev-parse --verify origin/main 2>/dev/null || git rev-parse HEAD~1)
+          fi
+          npx commitlint --from "$BASE_REF" --to HEAD --verbose
+          rm -rf node_modules
 
   detect-changes:
     name: Detect Changed Services
@@ -44,10 +49,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check for changes (Local git diff)
+      - name: Check for changes
         id: filter
         run: |
-          BASE_REF=$(git rev-parse --verify origin/main 2>/dev/null || git rev-parse HEAD~1)
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_REF=$(git rev-parse --verify origin/main 2>/dev/null || git rev-parse HEAD~1)
+          fi
           CHANGED=$(git diff --name-only "$BASE_REF"...HEAD)
           echo "Changed files since $BASE_REF:"
           echo "$CHANGED"

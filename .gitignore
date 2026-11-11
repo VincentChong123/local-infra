@@ -28,3 +28,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+
+# Node artifacts
+node_modules/
+package-lock.json
