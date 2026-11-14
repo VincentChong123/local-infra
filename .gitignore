@@ -6,6 +6,7 @@
 
 # Backups and dumps
 backup/
+**/backup/
 *.sql
 *.dump
 
@@ -27,3 +28,7 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+
+# Node artifacts
+node_modules/
+package-lock.json

@@ -112,3 +112,13 @@ repos:
       - id: conventional-pre-commit
         stages: [commit-msg]
         args: [feat, fix, chore, docs, test, refactor, ci]
+
+  - repo: local
+    hooks:
+      - id: act-local-ci
+        name: Run GitHub CI workflow locally via nektos/act
+        entry: act workflow_dispatch -W .github/workflows/ci.yml --pull=false
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
