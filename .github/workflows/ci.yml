@@ -184,4 +184,3 @@ jobs:
         run: |
           docker compose -f grafana/docker-compose.yaml down -v
           docker compose -f hyperdx/docker-compose.yaml down -v
-

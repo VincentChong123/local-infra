@@ -1,3 +1,4 @@
 -P ubuntu-latest=local-infra-runner:latest
 --container-daemon-socket=/var/run/docker.sock
 --pull=false
+--container-options=--network=host
